@@ -4,8 +4,10 @@ Boscinator spins up a disposable Docker container, clones an open source project
 
 ## Prerequisites
 
-- [Docker](https://docs.docker.com/get-docker/)
+- [Docker](https://docs.docker.com/get-docker/) (version 20.10 or later)
 - [Claude Code](https://docs.anthropic.com/en/docs/claude-code) (for the `/boscinate` slash command)
+
+The script runs preflight checks automatically: it verifies Docker is installed and running, checks the minimum version, and warns if Docker has less than 4 GB of memory available (common on Docker Desktop for macOS/Windows). It works on both Linux and macOS.
 
 ## Quick start
 
@@ -26,6 +28,14 @@ Claude will automatically:
 5. Print a structured report with the results
 6. Clean up the container
 
+To keep the container running after the build for manual exploration:
+
+```
+/boscinate --keep https://github.com/jqlang/jq
+```
+
+Claude will skip cleanup and print instructions for entering the container.
+
 ### Using the shell script directly
 
 ```bash
@@ -41,6 +51,12 @@ docker exec bosc-jq-a1b2c3d4 bash -c 'cd /workspace/project && ls'
 
 # Clean up when done
 ./boscinate.sh --cleanup bosc-jq-a1b2c3d4
+
+# Or use --keep to get an interactive container with entry instructions
+./boscinate.sh --keep https://github.com/jqlang/jq
+
+# Then enter it with:
+docker exec -it bosc-jq-a1b2c3d4 bash
 ```
 
 ## How it works

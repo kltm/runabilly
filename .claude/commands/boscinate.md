@@ -1,6 +1,8 @@
 Boscinate: explore, build, and run an open source project in a disposable Docker container.
 
-Input: $ARGUMENTS (a git URL)
+Input: $ARGUMENTS (a git URL, optionally preceded by `--keep`)
+
+Parse the arguments: if `--keep` is present, set KEEP_CONTAINER=true, otherwise KEEP_CONTAINER=false. The git URL is always the last argument.
 
 Follow these steps:
 
@@ -74,12 +76,26 @@ Output a structured summary:
   2. <step>
   ...
 - **Issues encountered:** <any problems and how they were resolved, or "None">
-- **Container:** <container-name> (still running for inspection)
+- **Container:** <container-name> (kept running / cleaned up)
 ```
 
 ## 6. Cleanup
 
-After reporting, remove the container:
+If KEEP_CONTAINER is true, skip cleanup and instead tell the user:
+
+```
+Container **<container-name>** is still running. To explore:
+
+    docker exec -it <container-name> bash
+
+The project is at /workspace/project inside the container.
+
+When done, clean up with:
+
+    ./boscinate.sh --cleanup <container-name>
+```
+
+If KEEP_CONTAINER is false, remove the container:
 
 ```
 ./boscinate.sh --cleanup <container-name>

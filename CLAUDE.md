@@ -9,3 +9,5 @@ A tool for building and testing open source projects in disposable Docker contai
 - The base image is minimal Ubuntu 24.04 — install language toolchains as needed per project
 - Container names follow the pattern `bosc-<reponame>-<hash>`
 - Use `./boscinate.sh <url>` to create containers and `./boscinate.sh --cleanup <name>` to remove them
+- Use `./boscinate.sh --keep <url>` to keep the container running after setup for manual exploration
+- The script runs cross-platform preflight checks (Docker installed/running, version >= 20.10, memory warning)
