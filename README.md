@@ -71,6 +71,6 @@ Each project gets its own isolated container named `bosc-<reponame>-<hash>`, cap
 |------|---------|
 | `Dockerfile` | Base Ubuntu 24.04 image definition |
 | `boscinate.sh` | Container lifecycle script (create, clone, cleanup) |
-| `.claude/commands/boscinate.md` | Claude Code slash command definition |
+| `.claude/skills/boscinate/SKILL.md` | Claude Code `/boscinate` skill definition |
 | `.claude/settings.local.json` | Pre-approved Docker permission patterns |
 | `CLAUDE.md` | Project conventions for Claude Code |
