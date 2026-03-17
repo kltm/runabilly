@@ -13,7 +13,7 @@ The script runs preflight checks automatically: it verifies Docker is installed 
 
 ### Using the Claude Code slash command (recommended)
 
-From within this project directory, run:
+These instructions assume you are already running [Claude Code](https://docs.anthropic.com/en/docs/claude-code) from this project directory. From the Claude Code prompt, run:
 
 ```
 /boscinate https://github.com/jqlang/jq
