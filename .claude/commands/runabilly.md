@@ -1,14 +1,16 @@
-Boscinate: explore, build, and run an open source project in a disposable Docker container.
+Runabilly: explore, build, and run an open source project in a disposable Docker container.
 
 Input: $ARGUMENTS (a git URL, optionally preceded by `--keep`)
 
 Parse the arguments: if `--keep` is present, set KEEP_CONTAINER=true, otherwise KEEP_CONTAINER=false. The git URL is always the last argument.
 
+**Timeout:** The entire evaluation (setup through build) must complete within 1 hour. Record the start time at the beginning. Before each build attempt, check elapsed time. If 1 hour has passed, stop immediately, clean up the container, and report the build result as FAILURE with "Timed out after 1 hour" in issues encountered.
+
 Follow these steps:
 
 ## 1. Setup
 
-Run `./boscinate.sh $ARGUMENTS` and parse the output for `BOSCINATOR_CONTAINER=<name>` and `BOSCINATOR_WORKDIR=<workdir>`. Save both values — use them in all subsequent `docker exec` commands.
+Run `./runabilly.sh $ARGUMENTS` and parse the output for `RUNABILLY_CONTAINER=<name>` and `RUNABILLY_WORKDIR=<workdir>`. Save both values — use them in all subsequent `docker exec` commands.
 
 If setup fails, report the error and stop.
 
@@ -64,18 +66,28 @@ If the build fails, read the error output, try to diagnose and fix (install miss
 Output a structured summary:
 
 ```
-## Boscinator Report
+## Runabilly Report
 
 - **Project:** <name> (<url>)
 - **Build system:** <detected build system>
 - **Language:** <primary language>
 - **Dependencies installed:** <list>
-- **Build result:** SUCCESS / FAILURE
+- **Build result:** SUCCESS / WARNING / FAILURE / UNDEFINED
+  - SUCCESS: builds and/or tests pass
+  - WARNING: builds partially but full validation blocked by a high hurdle (e.g. Docker-in-Docker, large external databases, requires paid API keys)
+  - FAILURE: build fails after retries
+  - UNDEFINED: URL isn't a buildable repo (e.g. Kaggle homepage, documentation site, dataset collection)
 - **Steps executed:**
   1. <step>
   2. <step>
   ...
 - **Issues encountered:** <any problems and how they were resolved, or "None">
+- **Difficulty:** <EASY / MODERATE / HARD / IMPRACTICAL>
+  - Time: <LOW / MEDIUM / HIGH> — LOW: < 60s, MEDIUM: 60s–300s, HIGH: > 300s (wall-clock build time)
+  - Dependencies: <LOW / MEDIUM / HIGH> — LOW: < 10 packages, MEDIUM: 10–50, HIGH: > 50 or multiple toolchains
+  - Exoticness: <LOW / MEDIUM / HIGH> — LOW: standard build system, no workarounds; MEDIUM: less common build system or minor workarounds; HIGH: custom scripts, multi-stage setup, Docker-in-Docker, etc.
+  - Divergence: <LOW / MEDIUM / HIGH> — LOW: documented build path worked on first try; MEDIUM: minor adjustments needed (missing dep, flag tweak); HIGH: documented path failed and alternate route required, or no docs at all
+  - Roll-up: EASY = all LOW; MODERATE = any MEDIUM, no HIGH; HARD = any HIGH; IMPRACTICAL = can't realistically complete in a disposable container
 - **Container:** <container-name> (kept running / cleaned up)
 ```
 
@@ -92,11 +104,11 @@ The project is at /workspace/project inside the container.
 
 When done, clean up with:
 
-    ./boscinate.sh --cleanup <container-name>
+    ./runabilly.sh --cleanup <container-name>
 ```
 
 If KEEP_CONTAINER is false, remove the container:
 
 ```
-./boscinate.sh --cleanup <container-name>
+./runabilly.sh --cleanup <container-name>
 ```

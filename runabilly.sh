@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-IMAGE_NAME="boscinator-base"
+IMAGE_NAME="runabilly-base"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MIN_DOCKER_VERSION="20.10"
 
@@ -83,7 +83,7 @@ cleanup() {
     local name="$1"
     echo "Removing container: $name"
     docker rm -f "$name" 2>/dev/null || true
-    echo "BOSCINATOR_CLEANED=$name"
+    echo "RUNABILLY_CLEANED=$name"
 }
 
 build_image() {
@@ -123,7 +123,7 @@ main() {
     local hash
     hash="$(echo "$git_url" | portable_md5)"
 
-    local container_name="bosc-${repo_name}-${hash}"
+    local container_name="runa-${repo_name}-${hash}"
 
     # Build image if needed
     build_image
@@ -145,8 +145,8 @@ main() {
         git clone "$git_url" /workspace/project
 
     echo ""
-    echo "BOSCINATOR_CONTAINER=$container_name"
-    echo "BOSCINATOR_WORKDIR=/workspace/project"
+    echo "RUNABILLY_CONTAINER=$container_name"
+    echo "RUNABILLY_WORKDIR=/workspace/project"
 
     if [[ "$keep" == true ]]; then
         echo ""
