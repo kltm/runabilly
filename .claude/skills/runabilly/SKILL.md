@@ -10,7 +10,7 @@ Input: $ARGUMENTS (a git URL, optionally preceded by `--keep`)
 
 Parse the arguments: if `--keep` is present, set KEEP_CONTAINER=true, otherwise KEEP_CONTAINER=false. The git URL is always the last argument.
 
-**Timeout:** The entire evaluation (setup through build) must complete within 1 hour. Record the start time at the beginning. Before each build attempt, check elapsed time. If 1 hour has passed, stop immediately, clean up the container, and report the build result as FAILURE with "Timed out after 1 hour" in issues encountered.
+**Timeout:** The entire evaluation (setup through build) must complete within 1 hour. Record the start time at the beginning. Before each build attempt, check elapsed time. If 1 hour has passed, stop immediately, clean up the container, and report the build result as FAILURE with "Timed out after 1 hour" in issues encountered. A timeout is always a FAILURE — even if the build might eventually succeed given more time, exceeding the timeout means the project cannot be built within the constraints of a disposable container evaluation.
 
 Follow these steps:
 
