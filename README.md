@@ -1,11 +1,11 @@
-# Boscinator
+# Runabilly
 
-Boscinator spins up a disposable Docker container, clones an open source project into it, and uses Claude to automatically explore, install dependencies, build, and report the results. It was created to support [BOSC](https://www.open-bio.org/events/bosc/) (Bioinformatics Open Source Conference) software evaluation workflows.
+Runabilly spins up a disposable Docker container, clones an open source project into it, and uses Claude to automatically explore, install dependencies, build, and report the results. It was created to support [BOSC](https://www.open-bio.org/events/bosc/) (Bioinformatics Open Source Conference) software evaluation workflows.
 
 ## Prerequisites
 
 - [Docker](https://docs.docker.com/get-docker/) (version 20.10 or later)
-- [Claude Code](https://docs.anthropic.com/en/docs/claude-code) (for the `/boscinate` slash command)
+- [Claude Code](https://docs.anthropic.com/en/docs/claude-code) (for the `/runabilly` slash command)
 
 The script runs preflight checks automatically: it verifies Docker is installed and running, checks the minimum version, and warns if Docker has less than 4 GB of memory available (common on Docker Desktop for macOS/Windows). It works on both Linux and macOS.
 
@@ -16,7 +16,7 @@ The script runs preflight checks automatically: it verifies Docker is installed 
 These instructions assume you are already running [Claude Code](https://docs.anthropic.com/en/docs/claude-code) from this project directory. From the Claude Code prompt, run:
 
 ```
-/boscinate https://github.com/jqlang/jq
+/runabilly https://github.com/jqlang/jq
 ```
 
 Claude will automatically:
@@ -31,7 +31,7 @@ Claude will automatically:
 To keep the container running after the build for manual exploration:
 
 ```
-/boscinate --keep https://github.com/jqlang/jq
+/runabilly --keep https://github.com/jqlang/jq
 ```
 
 Claude will skip cleanup and print instructions for entering the container.
@@ -40,37 +40,65 @@ Claude will skip cleanup and print instructions for entering the container.
 
 ```bash
 # Create a container and clone a project into it
-./boscinate.sh https://github.com/jqlang/jq
+./runabilly.sh https://github.com/jqlang/jq
 
 # Output:
-#   BOSCINATOR_CONTAINER=bosc-jq-a1b2c3d4
-#   BOSCINATOR_WORKDIR=/workspace/project
+#   RUNABILLY_CONTAINER=runa-jq-a1b2c3d4
+#   RUNABILLY_WORKDIR=/workspace/project
 
 # Run commands inside the container
-docker exec bosc-jq-a1b2c3d4 bash -c 'cd /workspace/project && ls'
+docker exec runa-jq-a1b2c3d4 bash -c 'cd /workspace/project && ls'
 
 # Clean up when done
-./boscinate.sh --cleanup bosc-jq-a1b2c3d4
+./runabilly.sh --cleanup runa-jq-a1b2c3d4
 
 # Or use --keep to get an interactive container with entry instructions
-./boscinate.sh --keep https://github.com/jqlang/jq
+./runabilly.sh --keep https://github.com/jqlang/jq
 
 # Then enter it with:
-docker exec -it bosc-jq-a1b2c3d4 bash
+docker exec -it runa-jq-a1b2c3d4 bash
 ```
 
 ## How it works
 
-Boscinator uses a minimal Ubuntu 24.04 base image with only basic tools (git, curl, build-essential, etc.). No language-specific toolchains are pre-installed — they get added as needed for each project. This keeps the base image small and avoids version conflicts.
+Runabilly uses a minimal Ubuntu 24.04 base image with only basic tools (git, curl, build-essential, etc.). No language-specific toolchains are pre-installed — they get added as needed for each project. This keeps the base image small and avoids version conflicts.
 
-Each project gets its own isolated container named `bosc-<reponame>-<hash>`, capped at 4 GB of memory. Everything runs inside the container via `docker exec`, so nothing is installed on your host machine.
+Each project gets its own isolated container named `runa-<reponame>-<hash>`, capped at 4 GB of memory. Everything runs inside the container via `docker exec`, so nothing is installed on your host machine.
+
+## Report output
+
+Each evaluation produces a structured report with:
+
+### Build result
+
+- **SUCCESS** — builds and/or tests pass
+- **WARNING** — builds partially but full validation blocked by a high hurdle (e.g. Docker-in-Docker, large external databases, requires paid API keys)
+- **FAILURE** — build fails after retries
+- **UNDEFINED** — URL isn't a buildable repo (e.g. Kaggle homepage, documentation site, dataset collection)
+
+### Difficulty rating
+
+A composite rating based on four sub-scores (each LOW / MEDIUM / HIGH):
+
+| Factor | LOW | MEDIUM | HIGH |
+|--------|-----|--------|------|
+| **Time** | < 60s | 60s–300s | > 300s |
+| **Dependencies** | < 10 packages | 10–50 | > 50 or multiple toolchains |
+| **Exoticness** | Standard build system, no workarounds | Less common build system or minor workarounds | Custom scripts, multi-stage setup, Docker-in-Docker, etc. |
+| **Divergence** | Documented build path worked on first try | Minor adjustments needed | Documented path failed; alternate route required, or no docs |
+
+Roll-up: **EASY** (all LOW), **MODERATE** (any MEDIUM, no HIGH), **HARD** (any HIGH), **IMPRACTICAL** (can't complete in a disposable container).
+
+### Timeout
+
+Evaluations are capped at 1 hour. If the build hasn't completed by then, the container is cleaned up and the result is reported as FAILURE.
 
 ## File layout
 
 | File | Purpose |
 |------|---------|
 | `Dockerfile` | Base Ubuntu 24.04 image definition |
-| `boscinate.sh` | Container lifecycle script (create, clone, cleanup) |
-| `.claude/skills/boscinate/SKILL.md` | Claude Code `/boscinate` skill definition |
+| `runabilly.sh` | Container lifecycle script (create, clone, cleanup) |
+| `.claude/skills/runabilly/SKILL.md` | Claude Code `/runabilly` skill definition |
 | `.claude/settings.local.json` | Pre-approved Docker permission patterns |
 | `CLAUDE.md` | Project conventions for Claude Code |
