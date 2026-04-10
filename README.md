@@ -7,7 +7,7 @@ Runabilly spins up a disposable Docker container, clones an open source project 
 - [Docker](https://docs.docker.com/get-docker/) (version 20.10 or later)
 - [Claude Code](https://docs.anthropic.com/en/docs/claude-code) (for the `/runabilly` slash command)
 
-The script runs preflight checks automatically: it verifies Docker is installed and running, checks the minimum version, and warns if Docker has less than 4 GB of memory available (common on Docker Desktop for macOS/Windows). It works on both Linux and macOS.
+The script runs preflight checks automatically: it verifies Docker is installed and running, checks the minimum version, warns if Docker has less than 4 GB of memory available (common on Docker Desktop for macOS/Windows), and warns if the Docker root directory has less than 20 GB of free disk (matters for LFS-heavy and conda-heavy bioinformatics repos). It works on both Linux and macOS.
 
 ## Quick start
 
@@ -61,9 +61,16 @@ docker exec -it runa-jq-a1b2c3d4 bash
 
 ## How it works
 
-Runabilly uses a minimal Ubuntu 24.04 base image with only basic tools (git, curl, build-essential, etc.). No language-specific toolchains are pre-installed — they get added as needed for each project. This keeps the base image small and avoids version conflicts.
+Runabilly uses a minimal Ubuntu 24.04 base image with only basic tools (git, git-lfs, curl, build-essential, etc.). No language-specific toolchains are pre-installed — they get added as needed for each project. This keeps the base image small and avoids version conflicts.
 
 Each project gets its own isolated container named `runa-<reponame>-<hash>`, capped at 4 GB of memory. Everything runs inside the container via `docker exec`, so nothing is installed on your host machine.
+
+### Environment policies
+
+- **Network access:** containers have full outbound internet access during the entire evaluation. Builds can `apt-get install`, `pip install`, `cargo fetch`, `R install.packages`, `conda install`, `git clone` submodules, etc. Inbound network is not configured.
+- **GPU:** no GPU is exposed to the container. CUDA/ROCm/Metal-only projects are reported as **WARNING** with the GPU requirement noted as the hurdle.
+- **Git LFS:** `git-lfs` is installed in the base image, but clones run with `GIT_LFS_SKIP_SMUDGE=1` so LFS-tracked files remain pointer stubs by default. This prevents surprise multi-gigabyte pulls on data-heavy bioinformatics repos. When the build or tests actually need the LFS data, Claude opts in per repo with `git lfs install --local && git lfs pull` inside the container.
+- **Disposability:** containers are torn down at the end of each run unless `--keep` is passed. Nothing persists between evaluations.
 
 ## Report output
 
@@ -71,9 +78,9 @@ Each evaluation produces a structured report with:
 
 ### Build result
 
-- **SUCCESS** — builds and/or tests pass
-- **WARNING** — builds partially but full validation blocked by a high hurdle (e.g. Docker-in-Docker, large external databases, requires paid API keys)
-- **FAILURE** — build fails after retries
+- **SUCCESS** — build completes AND the project's tests run and pass (or no test infrastructure is present). Tests are required when present: a passing build with failing tests is **not** a SUCCESS.
+- **WARNING** — build completes but full test validation is blocked by an unavoidable environmental hurdle (e.g. Docker-in-Docker, large external databases, paid API keys, GPU-only). The code looks healthy; the environment can't validate it. The specific hurdle is named in the report.
+- **FAILURE** — build fails after retries, OR tests run but fail, OR the 1-hour timeout is exceeded
 - **UNDEFINED** — URL isn't a buildable repo (e.g. Kaggle homepage, documentation site, dataset collection)
 
 ### Difficulty rating
