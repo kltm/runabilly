@@ -77,6 +77,29 @@ preflight_checks() {
             echo "Increase memory in Docker Desktop settings if builds fail." >&2
         fi
     fi
+
+    # Warn if the Docker root directory is low on disk. Bioinformatics repos
+    # with Git LFS data, conda environments, or Bioconductor builds can blow
+    # through tens of GB; we want the user to know before that happens.
+    # On macOS/Windows the Docker root lives inside a VM so this check is
+    # best-effort and silently skipped if the path isn't on the host.
+    local docker_root
+    docker_root="$(docker info --format '{{.DockerRootDir}}' 2>/dev/null || echo "")"
+    if [[ -n "$docker_root" ]] && [[ -d "$docker_root" ]]; then
+        local avail_kb
+        avail_kb="$(df -Pk "$docker_root" 2>/dev/null | awk 'NR==2 {print $4}')"
+        if [[ -n "$avail_kb" ]] && [[ "$avail_kb" =~ ^[0-9]+$ ]]; then
+            local avail_gb
+            avail_gb=$(awk "BEGIN {printf \"%.1f\", $avail_kb / 1048576}")
+            # 20 GB soft floor — enough for most builds; LFS-heavy repos may need more
+            if ((avail_kb < 20971520)); then
+                echo "Warning: only ${avail_gb}GB free at Docker root ($docker_root)" >&2
+                echo "  Builds with large dependencies may fail. If the target repo uses Git LFS," >&2
+                echo "  pulling its data could exhaust this space. Consider freeing up disk:" >&2
+                echo "    docker system prune -af --volumes" >&2
+            fi
+        fi
+    fi
 }
 
 cleanup() {
@@ -139,10 +162,21 @@ main() {
         "$IMAGE_NAME" \
         sleep infinity >/dev/null
 
-    # Clone the repo inside the container
+    # Clone the repo inside the container.
+    # GIT_LFS_SKIP_SMUDGE=1 leaves any LFS-tracked files as pointer stubs so a
+    # data-heavy repo doesn't silently pull tens of GB during setup. The skill
+    # decides per-repo whether to materialise them with `git lfs pull`.
     echo "Cloning $git_url into container..."
-    docker exec "$container_name" \
+    docker exec -e GIT_LFS_SKIP_SMUDGE=1 "$container_name" \
         git clone "$git_url" /workspace/project
+
+    # If the repo uses Git LFS, surface that to the caller so they (and the
+    # skill) know there are pointer files in place.
+    if docker exec "$container_name" \
+        bash -c 'grep -lq "filter=lfs" /workspace/project/.gitattributes 2>/dev/null'; then
+        echo "Note: this repo uses Git LFS. Pointer files left in place." >&2
+        echo "  To materialise: docker exec $container_name bash -c 'cd /workspace/project && git lfs install --local && git lfs pull'" >&2
+    fi
 
     echo ""
     echo "RUNABILLY_CONTAINER=$container_name"
