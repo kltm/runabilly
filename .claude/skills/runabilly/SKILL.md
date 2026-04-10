@@ -44,17 +44,18 @@ for f in \
     mix.exs rebar.config stack.yaml dune-project \
     Project.toml Manifest.toml JuliaProject.toml \
     DESCRIPTION NAMESPACE renv.lock \
-    Snakefile nextflow.config main.nf \
+    Snakefile workflow/Snakefile nextflow.config main.nf \
     Gemfile composer.json cpanfile Makefile.PL \
     Dockerfile docker-compose.yml Containerfile Singularity Singularity.def; do
   [ -e "$f" ] && echo "FOUND: $f"
 done && \
 echo "=== Workflow / domain files ===" && \
-find . -maxdepth 3 \( -name "*.smk" -o -name "*.nf" -o -name "*.cwl" -o -name "*.wdl" -o -name "*.Rproj" -o -name "*.cabal" -o -name "*.rockspec" \) 2>/dev/null | head -20 && \
+find . -maxdepth 3 \( -name "Snakefile" -o -name "*.smk" -o -name "*.nf" -o -name "*.cwl" -o -name "*.wdl" -o -name "*.Rproj" -o -name "*.cabal" -o -name "*.rockspec" \) 2>/dev/null | head -20 && \
 echo "=== Git LFS ===" && \
 ( grep -lq "filter=lfs" .gitattributes 2>/dev/null && echo "REPO USES GIT LFS (pointer files only; run git lfs install --local && git lfs pull to materialise)" || echo "No LFS markers" ) && \
 echo "=== CI configs (often reveal canonical build/test commands) ===" && \
-( ls -d .github/workflows .gitlab-ci.yml .travis.yml .circleci azure-pipelines.yml 2>/dev/null || echo "No CI configs found" )'
+( ls -d .github/workflows .gitlab-ci.yml .travis.yml .circleci azure-pipelines.yml 2>/dev/null || echo "No CI configs found" ) && \
+true'
 ```
 
 Identify the build system and language from the files present. If multiple are present (e.g., a Python project that wraps a Snakemake workflow), pick the one that matches the project's stated purpose in its README. If nothing recognisable shows up, fall back to reading the README and any `INSTALL`, `BUILDING`, `CONTRIBUTING` files.
@@ -89,7 +90,9 @@ All installs run via: `docker exec <container> bash -c '...'`
 - **PHP:** `apt-get update && apt-get install -y php php-cli composer`
 
 **Scientific / data:**
-- **R:** `apt-get update && apt-get install -y r-base r-base-dev` then `R -e 'install.packages(c(...), repos="https://cloud.r-project.org")'` or `R CMD INSTALL .` for the package itself. For Bioconductor: `R -e 'install.packages("BiocManager"); BiocManager::install(c(...))'`. For renv-managed projects: `R -e 'renv::restore()'`.
+- **R:** `apt-get update && apt-get install -y r-base r-base-dev cmake` then `R -e 'install.packages(c(...), repos="https://cloud.r-project.org")'` or `R CMD INSTALL .` for the package itself. For Bioconductor: `R -e 'install.packages("BiocManager"); BiocManager::install(c(...))'`. For renv-managed projects: `R -e 'renv::restore()'`.
+  - Ubuntu 24.04 ships R 4.3.x, but many Bioconductor packages require R >= 4.4. If you hit a version-mismatch error, add the CRAN repo for a newer R: `wget -qO- https://cloud.r-project.org/bin/linux/ubuntu/marutter_pubkey.asc | gpg --dearmor -o /usr/share/keyrings/r-project.gpg && echo "deb [signed-by=/usr/share/keyrings/r-project.gpg] https://cloud.r-project.org/bin/linux/ubuntu noble-cran40/" > /etc/apt/sources.list.d/r-project.list && apt-get update && apt-get install -y r-base r-base-dev`
+  - `cmake` is included above because many R packages transitively depend on the `fs` package, which compiles bundled libuv and needs cmake. Other common system deps: `libcurl4-openssl-dev`, `libssl-dev`, `libxml2-dev`, `libfontconfig1-dev`, `libharfbuzz-dev`, `libfribidi-dev`, `libfreetype6-dev`, `libpng-dev`, `libtiff5-dev`, `libjpeg-dev`, `pandoc`, `qpdf`, `texlive-latex-base`.
 - **Julia:** `curl -fsSL https://install.julialang.org | sh -s -- --yes` then `~/.juliaup/bin/julia --project -e 'using Pkg; Pkg.instantiate()'`
 - **Conda / Mamba (miniforge):** `curl -fsSL -o /tmp/mf.sh https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-x86_64.sh && bash /tmp/mf.sh -b -p /opt/conda && export PATH=/opt/conda/bin:$PATH && conda env create -f environment.yml`
 
@@ -126,7 +129,7 @@ Attempt to build the project following the discovered instructions. Common patte
 - **gradle:** `./gradlew build` (prefer the wrapper) or `gradle build`
 - **R package:** `R CMD INSTALL .` (install BiocManager/CRAN deps from DESCRIPTION first)
 - **Julia:** `julia --project -e 'using Pkg; Pkg.instantiate(); Pkg.build()'`
-- **Snakemake:** `snakemake --cores all -n` (dry-run first to validate the DAG, then a real run if a small example exists)
+- **Snakemake:** `snakemake --cores all -n` (dry-run first to validate the DAG, then a real run if a small example exists). For Snakemake Workflow Catalog repos where the Snakefile lives under `workflow/`, use `snakemake --snakefile workflow/Snakefile --directory .test --cores all -n`. The `.test/` directory (dot-prefixed) typically holds the test config and data.
 - **Nextflow:** `nextflow run main.nf -profile test` if a `test` profile exists, otherwise `nextflow run main.nf` against the smallest example inputs in the repo
 - **CWL:** `cwltool workflow.cwl examples/inputs.yml` (use any provided example inputs)
 - **WDL:** `miniwdl run workflow.wdl` with example inputs
@@ -164,9 +167,9 @@ After a successful build, you **must** run the project's tests if any test infra
 - `tests/`, `test/`, `t/`, `spec/`, `__tests__/` directories
 - Pytest/unittest in Python (`pytest`, `python -m unittest discover`); a `tox.ini` or `noxfile.py` is also a strong signal
 - `cargo test` for Rust, `go test ./...` for Go, `npm test` / `npm run test` for Node, `mvn test` for Maven, `./gradlew test` for Gradle, `make check` or `make test` for autotools/make
-- `R CMD check .` or `devtools::test()` for R packages, `testthat` directories
+- `R CMD build . && R CMD check <package>_<version>.tar.gz` for R packages (do not run `R CMD check .` directly — it fails for packages using `Authors@R`). Alternatively `devtools::test()` for `testthat`-based packages.
 - `Pkg.test()` for Julia
-- `snakemake --cores all -n` (DAG dry-run) and any `tests/` workflow for Snakemake
+- `snakemake --cores all -n` (DAG dry-run) for Snakemake; for Snakemake Workflow Catalog repos use `--snakefile workflow/Snakefile --directory .test`. Check for `.test/` (dot-prefixed) as well as `tests/`.
 - `nextflow run main.nf -profile test` for Nextflow
 - `cwltool --validate workflow.cwl` and example runs for CWL
 - The project's CI config (`.github/workflows/*.yml`) is usually the canonical answer — if a CI job runs `pytest -xvs tests/`, do that.
